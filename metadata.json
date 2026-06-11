@@ -1,0 +1,6 @@
+{
+  "name": "Trends",
+  "description": "Trends is a premium, modern e-commerce platform for cutting-edge electronics, chic fashion, high-quality accessories, and curated lifestyle products.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
