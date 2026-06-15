@@ -30,6 +30,7 @@ export const INITIAL_PRODUCTS: Product[] = [
       'Battery Life': 'Up to 40 hours (ANC Off), 30 hours (ANC On)'
     },
     images: [
+      'https://files.catbox.moe/ewh7sy.htm',
       'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&q=80&w=800',
       'https://images.unsplash.com/photo-1484704849700-f032a568e944?auto=format&fit=crop&q=80&w=800',
       'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&q=80&w=800'
