@@ -18,6 +18,9 @@ import CartView from './components/CartView';
 import CheckoutView from './components/CheckoutView';
 import LoginRegisterView from './components/LoginRegisterView';
 import { motion, AnimatePresence } from 'motion/react';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 export default function App() {
   // Navigation State
@@ -27,12 +30,12 @@ export default function App() {
   // Filter scales bridged between tabs
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
 
-  // Customer/User Profile simulation
+  // Customer/User Profile aligned with Firebase Auth and Firestore
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    id: 'user-007',
-    email: 'mounikamadisa05@gmail.com', // Pre-populate for visual charm & conversion focus
-    name: 'Mounika Madisa',
-    isAuthenticated: true,
+    id: '',
+    email: '',
+    name: '',
+    isAuthenticated: false,
     wishlist: []
   });
 
@@ -45,15 +48,87 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activeTab, selectedProduct]);
 
-  // Wishlist controls
-  const handleToggleWishlist = (product: Product) => {
-    setUserProfile((prev) => {
-      const isAlreadyWishlisted = prev.wishlist.includes(product.id);
-      const updatedWishlist = isAlreadyWishlisted
-        ? prev.wishlist.filter((id) => id !== product.id)
-        : [...prev.wishlist, product.id];
-      return { ...prev, wishlist: updatedWishlist };
+  // Subscribe to Firebase Auth State Changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const uid = firebaseUser.uid;
+        const email = firebaseUser.email || '';
+        const name = firebaseUser.displayName || email.split('@')[0];
+        
+        const userDocRef = doc(db, 'users', uid);
+        try {
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setUserProfile({
+              id: uid,
+              email: data.email || email,
+              name: data.name || name,
+              isAuthenticated: true,
+              wishlist: data.wishlist || []
+            });
+          } else {
+            const newProfile: UserProfile = {
+              id: uid,
+              email,
+              name,
+              isAuthenticated: true,
+              wishlist: []
+            };
+            // Keys exact matching per rules constraint
+            await setDoc(userDocRef, {
+              id: uid,
+              email,
+              name,
+              wishlist: []
+            });
+            setUserProfile(newProfile);
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.GET, `users/${uid}`);
+        }
+      } else {
+        setUserProfile({
+          id: '',
+          email: '',
+          name: '',
+          isAuthenticated: false,
+          wishlist: []
+        });
+      }
     });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Wishlist controls with Firestore Synchronization
+  const handleToggleWishlist = async (product: Product) => {
+    if (!userProfile.isAuthenticated) {
+      setActiveTab('login');
+      return;
+    }
+
+    const isAlreadyWishlisted = userProfile.wishlist.includes(product.id);
+    const updatedWishlist = isAlreadyWishlisted
+      ? userProfile.wishlist.filter((id) => id !== product.id)
+      : [...userProfile.wishlist, product.id];
+    
+    // Optimistic UI Update
+    setUserProfile((prev) => ({ ...prev, wishlist: updatedWishlist }));
+
+    // Firebase Firestore Sync
+    const uid = userProfile.id;
+    if (uid) {
+      const userDocRef = doc(db, 'users', uid);
+      try {
+        await updateDoc(userDocRef, {
+          wishlist: updatedWishlist
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+      }
+    }
   };
 
   const isWishlisted = (product: Product) => {
@@ -143,23 +218,24 @@ export default function App() {
 
   // Auth Operations
   const handleLogin = (email: string) => {
-    setUserProfile({
-      id: `usr-${Date.now()}`,
-      email,
-      name: email.split('@')[0],
-      isAuthenticated: true,
-      wishlist: []
-    });
+    // Left as legacy wrapper for compatibility with older handlers; real status is processed in background subscriptions
+    setActiveTab('home');
   };
 
-  const handleLogout = () => {
-    setUserProfile({
-      id: '',
-      email: '',
-      name: '',
-      isAuthenticated: false,
-      wishlist: []
-    });
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setUserProfile({
+        id: '',
+        email: '',
+        name: '',
+        isAuthenticated: false,
+        wishlist: []
+      });
+      setActiveTab('home');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
   const handleSelectProduct = (product: Product) => {
@@ -326,6 +402,7 @@ export default function App() {
                 appliedCoupon={appliedCoupon}
                 onClearCart={handleClearCart}
                 setActiveTab={setActiveTab}
+                userId={userProfile.isAuthenticated ? userProfile.id : null}
               />
             </motion.div>
           )}

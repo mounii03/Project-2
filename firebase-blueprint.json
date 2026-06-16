@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Information about a registered customer profile, including credentials and personal wishlist curation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique firebase authentication UID of the user."
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address."
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of the user."
+        },
+        "wishlist": {
+          "type": "array",
+          "description": "Array of product ID strings representing the user's wishlisted items."
+        }
+      },
+      "required": ["id", "email", "name", "wishlist"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Details of safe transactions completed under curations checkout points.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique checkout invoice reference id."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Uniquely maps order back to the specific authenticating account."
+        },
+        "items": {
+          "type": "array",
+          "description": "List of purchased cart items and their quantities."
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "The initial cost sum of order lines."
+        },
+        "discount": {
+          "type": "number",
+          "description": "Deductions from promotional coupons."
+        },
+        "shipping": {
+          "type": "number",
+          "description": "The computed cost of express transport."
+        },
+        "total": {
+          "type": "number",
+          "description": "Final amount debited via checkout credentials."
+        },
+        "shippingAddress": {
+          "type": "object",
+          "description": "Physical destination details for parcel shipment."
+        },
+        "date": {
+          "type": "string",
+          "description": "The serial timestamp when logistics cleared."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Processing", "Shipped", "Delivered"],
+          "description": "Dispatch logistics tracking index."
+        }
+      },
+      "required": ["id", "userId", "items", "subtotal", "discount", "shipping", "total", "shippingAddress", "date", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Users profile metadata collection mapped to auth UID."
+    },
+    "/users/{userId}/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Collection of transactional receipts associated with the specified customer profile."
+    }
+  }
+}

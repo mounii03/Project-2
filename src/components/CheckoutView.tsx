@@ -7,19 +7,23 @@ import React, { useState } from 'react';
 import { ShieldCheck, ArrowRight, CreditCard, Lock, Sparkles, Check, Truck, ClipboardList } from 'lucide-react';
 import { CartItem, Coupon } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface CheckoutViewProps {
   cartItems: CartItem[];
   appliedCoupon: Coupon | null;
   onClearCart: () => void;
   setActiveTab: (tab: string) => void;
+  userId: string | null;
 }
 
 export default function CheckoutView({
   cartItems,
   appliedCoupon,
   onClearCart,
-  setActiveTab
+  setActiveTab,
+  userId
 }: CheckoutViewProps) {
   // Step tracker: 1 = Shipping Form, 2 = Loading animation, 3 = Confirmation Receipt Invoice Custom view
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -60,12 +64,53 @@ export default function CheckoutView({
   const [finalInvoiceId] = useState(() => `TRD-${Math.floor(100000 + Math.random() * 900000)}`);
   const [finalReceiptItems] = useState<CartItem[]>([...cartItems]);
 
-  const handlePurchaseSubmit = (e: React.FormEvent) => {
+  const handlePurchaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !email || !addressLine1 || !city || !zipCode || !cardNumber || !cvv) return;
 
     // Trigger secure mock payment loading
     setStep(2);
+
+    // If user is authenticated, register the order to Cloud Firestore
+    if (userId) {
+      const orderDocRef = doc(db, 'users', userId, 'orders', finalInvoiceId);
+      
+      const itemsPayload = finalReceiptItems.map(item => ({
+        productId: item.product.id,
+        title: item.product.title,
+        price: Number(item.product.price),
+        quantity: Number(item.quantity),
+        selectedColor: item.selectedColor || '',
+        selectedSize: item.selectedSize || ''
+      }));
+
+      const shippingAddressPayload = {
+        fullName,
+        email,
+        addressLine1,
+        city,
+        state: regionState || '',
+        zipCode,
+        phone
+      };
+
+      try {
+        await setDoc(orderDocRef, {
+          id: finalInvoiceId,
+          userId: userId,
+          items: itemsPayload,
+          subtotal: Number(subtotal),
+          discount: Number(discountVal),
+          shipping: Number(shippingCharge),
+          total: Number(overallTotal),
+          shippingAddress: shippingAddressPayload,
+          date: new Date().toDateString(),
+          status: 'Processing'
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `users/${userId}/orders/${finalInvoiceId}`);
+      }
+    }
 
     setTimeout(() => {
       setStep(3);
